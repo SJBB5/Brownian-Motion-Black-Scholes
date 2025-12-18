@@ -1,0 +1,7 @@
+README.md
+pyproject.toml
+src/bsutils.egg-info/PKG-INFO
+src/bsutils.egg-info/SOURCES.txt
+src/bsutils.egg-info/dependency_links.txt
+src/bsutils.egg-info/requires.txt
+src/bsutils.egg-info/top_level.txt

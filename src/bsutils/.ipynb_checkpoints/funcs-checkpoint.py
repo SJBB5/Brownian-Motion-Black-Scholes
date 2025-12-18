@@ -1,8 +1,13 @@
 import requests
 import pandas as pd
+import numpy as np
 import os
 from dotenv import load_dotenv
+import yfinance as yf
+from datetime import datetime
 import matplotlib.pyplot as plt
+from scipy.stats import norm
+
 # Load the .env file
 load_dotenv()
 
@@ -104,3 +109,63 @@ def plot_ticker(dat_dict, ticker):
     plt.legend()
     
     plt.show()
+
+def blackScholes(r, S, K, T, sigma, type="C"):
+    # Calculate BS option price for a call/put.
+    d1 = (np.log(S/K) + (r + sigma**2/2)*T)/(sigma*np.sqrt(T))
+    d2 = d1 - sigma*np.sqrt(T)
+    try:
+        if type == "C":
+            price = S*norm.cdf(d1, 0, 1) - K*np.exp(-r*T)*norm.cdf(d2,0,1)
+        elif type == "P":
+            price = K*np.exp(-r*T)*norm.cdf(-d2,0,1) - S*norm.cdf(-d1,0,1)
+        return price
+    except:
+        print("Confirm all params above")
+
+def build_bs_param_df(
+    ticker="^SPX",
+    expiration_index=5,
+    r=0.04,
+    opt_type="C",
+    sigma=0.20,          # <--- constant volatility
+):
+    tk = yf.Ticker(ticker)
+
+    # spot
+    hist = tk.history(period="1d")
+    if hist.empty:
+        raise ValueError(f"No price history for {ticker}.")
+    S = float(hist["Close"].iloc[-1])
+
+    expirations = tk.options
+    if not expirations:
+        raise ValueError(f"No options data for {ticker}.")
+
+    # pick expiration
+    exp_str = expirations[expiration_index]
+
+    from datetime import datetime
+    today = datetime.now()
+    T = (datetime.strptime(exp_str, "%Y-%m-%d") - today).days / 365.0
+    if T <= 0:
+        raise ValueError(f"Expiration {exp_str} has non-positive T={T:.6f}.")
+
+    chain = tk.option_chain(exp_str)
+    raw_df = chain.calls if opt_type == "C" else chain.puts
+
+    df = raw_df.dropna(subset=["lastPrice", "strike"]).copy()
+
+    params_df = pd.DataFrame({
+        "S": S,
+        "K": df["strike"].values,
+        "T": T,
+        "r": r,
+        "sigma": sigma,          # <--- same sigma for all options
+        "type": opt_type,
+        "lastPrice": df["lastPrice"].values,
+    })
+
+    return params_df
+
+
